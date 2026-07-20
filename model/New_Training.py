@@ -1,0 +1,195 @@
+import torch
+import torch.nn as nn
+import torch.nn.functional as F
+import torch.optim as optim
+from torch.utils.data import Dataset, DataLoader
+import numpy as np
+import matplotlib.pyplot as plt
+import matplotlib.colors as mcolors
+from sklearn.metrics import mean_absolute_error, root_mean_squared_error, r2_score, roc_auc_score
+import sys
+from new_model import *
+from DataLoader_TopCPToolkit import CustomDataset
+
+tag = str(sys.argv[1])
+epochs = int(sys.argv[2])
+embed_dim = int(sys.argv[3])
+dir_dataset = str(sys.argv[4])
+dir_training = str(sys.argv[5])
+
+# Path to a checkpoint of this same (costheta-only) architecture to resume from.
+dir_startingPoint = ""
+
+starting_new = True
+continue_training = not starting_new
+
+batch_size=256
+learning_rate=0.0001
+
+dset = torch.load(dir_dataset+"/dataset_combined.pt", weights_only=False)
+
+generator = torch.Generator().manual_seed(42)
+
+train_dataset, test_dataset = torch.utils.data.random_split(dset, [0.75, 0.25], generator=generator)
+val_dataset, test_dataset = torch.utils.data.random_split(test_dataset, [0.2, 0.8], generator=generator)
+
+train_loader = DataLoader(train_dataset, batch_size=batch_size)
+val_loader = DataLoader(val_dataset, batch_size=batch_size)
+test_loader = DataLoader(test_dataset, batch_size=batch_size)
+
+print("GPU Available: ", torch.cuda.is_available())
+device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+print(device)
+
+num_heads=4
+if starting_new:
+    model = Model(embed_dim,num_heads).to(device)
+if continue_training:
+    model = torch.load(dir_startingPoint+"/model_final.torch",weights_only=False,map_location=torch.device(device))
+
+step_size=160
+Gamma=0.1
+#optimizer = optim.AdamW(model.parameters(), lr=learning_rate)
+optimizer = optim.Adam(model.parameters(), lr=learning_rate)
+scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=step_size, gamma=Gamma)
+
+def calc_norm(y_pred):
+    norm = torch.sqrt(torch.sum(torch.square(y_pred), dim=1)).reshape(-1,1)
+    y_pred_norm = torch.div(y_pred, norm)
+    return y_pred_norm
+
+def uniform_to_circle(cos_theta):
+    angle = torch.acos(cos_theta)
+    return torch.cat([cos_theta, torch.sin(angle)], dim=1)
+
+cosSim_loss_fn = nn.CosineEmbeddingLoss()
+
+print("Trainable Parameters :", sum(p.numel() for p in model.parameters() if p.requires_grad))
+print("Number of Training Events: ", len(train_loader)*batch_size)
+
+for probe_jet, constituents, event, costheta_labels, track_labels in train_loader:
+    costheta_pred = model(probe_jet.to(device), constituents.to(device), event.to(device))
+    break
+
+def train(model, optimizer, train_loader, val_loader, epochs=40):
+
+    combined_history = []
+
+    for e in range(epochs):
+        model.train()
+        cumulative_loss_train = 0
+        num_train = len(train_loader)
+
+        for probe_jet, constituents, event, costheta_labels, track_labels in train_loader:
+            optimizer.zero_grad()
+
+            costheta_pred = model(probe_jet.to(device), constituents.to(device), event.to(device))
+
+            costheta_pred = calc_norm(costheta_pred)
+            costheta_true = uniform_to_circle(costheta_labels.to(device))
+            cos_target = torch.ones(costheta_pred.shape[0]).to(device)
+
+            loss = cosSim_loss_fn(costheta_pred, costheta_true, cos_target)
+
+            loss.backward()
+            optimizer.step()
+
+            cumulative_loss_train+=loss.detach().cpu().numpy().mean()
+
+        cumulative_loss_train = cumulative_loss_train / num_train
+
+        model.eval()
+        cumulative_loss_val = 0
+        num_val = len(val_loader)
+        for probe_jet, constituents, event, costheta_labels, track_labels in val_loader:
+            costheta_pred = model(probe_jet.to(device), constituents.to(device), event.to(device))
+
+            costheta_pred = calc_norm(costheta_pred)
+            costheta_true = uniform_to_circle(costheta_labels.to(device))
+            cos_target = torch.ones(costheta_pred.shape[0]).to(device)
+
+            loss = cosSim_loss_fn(costheta_pred, costheta_true, cos_target)
+
+            cumulative_loss_val+=loss.detach().cpu().numpy().mean()
+
+        cumulative_loss_val = cumulative_loss_val / num_val
+
+        combined_history.append([cumulative_loss_train, cumulative_loss_val])
+
+        scheduler.step()
+
+        if e%1==0:
+            print('Epoch:',e+1,'\tTrain Loss:',round(cumulative_loss_train,6),'\tVal Loss:',round(cumulative_loss_val,6))
+            print()
+
+        torch.save(model,dir_training+"/models/model_Epoch_"+str(e+1)+".torch")
+
+    return np.array(combined_history)
+
+history = train(model, optimizer, train_loader, val_loader, epochs=epochs)
+
+torch.save(model,dir_training+"/model_final.torch")
+
+plt.figure()
+plt.plot(history[:,0], label="Train")
+plt.plot(history[:,1], label="Val")
+plt.title('Loss')
+plt.legend()
+plt.yscale('log')
+plt.savefig(dir_training+"/loss_curve_total.png")
+#plt.show()
+
+plt.figure()
+plt.plot(history[int(epochs/2):,0], label="Train")
+plt.plot(history[int(epochs/2):,1], label="Val")
+plt.title('Loss')
+plt.legend()
+plt.yscale('log')
+plt.savefig(dir_training+"/loss_curve_second_half.png")
+#plt.show()
+
+direct_feats=1
+pred_direct = np.array([]).reshape(0,direct_feats)
+true_direct = np.array([]).reshape(0,direct_feats)
+
+for probe_jet, constituents, event, costheta_labels, track_labels in test_loader:
+    costheta_pred = model(probe_jet.to(device), constituents.to(device), event.to(device))
+
+    costheta_pred = calc_norm(costheta_pred)
+
+    pred_direct = np.vstack((pred_direct,costheta_pred[:,0].reshape(-1,1).detach().cpu().numpy()))
+    true_direct = np.vstack((true_direct,costheta_labels[:,0].reshape(-1,1).detach().cpu().numpy()))
+
+def validate_predictions(true, pred, var_names):
+    num_feats = len(var_names)
+    ranges_dict = {"costheta": (-1.1,1.1)}
+
+    for i ,var in enumerate(var_names):
+        var_range = ranges_dict[var]
+
+        plt.figure()
+        plt.hist(np.ravel(true[:,i]),histtype='step',color='r',label='True Distribution',bins=50,range=var_range)
+        plt.hist(np.ravel(pred[:,i]),histtype='step',color='b',label='Predicted Distribution',bins=50,range=var_range)
+        plt.title("Predicted Ouput Distribution using Attention Model")
+        plt.legend()
+        plt.yscale('log')
+        plt.xlabel(var_names[i],loc='right')
+        plt.savefig(dir_training+"/pred_1d_"+var_names[i]+".png")
+        #plt.show()
+        plt.close()
+
+        #plt.figure()
+        fig, ax = plt.subplots()
+        plt.title("Ouput Distribution using Attention Model")
+        h = ax.hist2d(np.ravel(pred[:,i]),np.ravel(true[:,i]), bins=100,norm=mcolors.LogNorm(),range=(var_range,var_range))
+        #fig.colorbar(h[3], ax=ax)
+        plt.xlabel('Predicted '+var_names[i],loc='right')
+        plt.ylabel('True '+var_names[i],loc='top')
+        diff = var_range[1] - var_range[0]
+        plt.text(var_range[1]-0.3*diff,var_range[0]+0.2*diff,"$R^2$ value: "+str(round(r2_score(np.ravel(true[:,i]),np.ravel(pred[:,i])),3)),backgroundcolor='r',color='k')
+        #print("R^2 value: ", round(r2_score(true_labels[:,i],predicted_labels[:,i]),3))
+        plt.savefig(dir_training+"/pred_2d_"+var_names[i]+".png")
+        #plt.show()
+        plt.close()
+
+validate_predictions(true_direct, pred_direct, ["costheta"])

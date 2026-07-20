@@ -1,0 +1,20 @@
+[submodule "mg5amcnlo"]
+	path = submodules/mg5amcnlo-v3.5.5
+	url = https://github.com/mg5amcnlo/mg5amcnlo.git
+	ignore = dirty
+[submodule "pythia"]
+	path = submodules/pythia-v8.312
+	url = https://gitlab.com/Pythia8/releases.git
+	ignore = dirty
+[submodule "hepmc"]
+	path = submodules/hepmc-v2.06.11
+	url = https://gitlab.cern.ch/hepmc/HepMC.git
+	ignore = dirty
+[submodule "delphes"]
+	path = submodules/delphes-v3.5.0
+	url = https://github.com/delphes/delphes.git
+	ignore = dirty
+[submodule "fastjet"]
+	path = submodules/fastjet-v3.4.2
+	url = https://gitlab.com/fastjet/fastjet.git
+	ignore = dirty
