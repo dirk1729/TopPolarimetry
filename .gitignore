@@ -14,3 +14,4 @@ model/WS*
 training
 data
 .claude
+envs
