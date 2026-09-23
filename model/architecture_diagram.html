@@ -1,0 +1,477 @@
+<title>Polarimeter Attention Net</title>
+<style>
+  :root{
+    --bg:#F4F6F5;
+    --panel:#FFFFFF;
+    --ink:#1A2421;
+    --muted:#5B6B66;
+    --line:#C7D0CC;
+    --accent:#D97B29;
+    --stream-jet:#3B6EA8;
+    --stream-trk:#2F8F86;
+    --stream-evt:#7A5FA0;
+  }
+  @media (prefers-color-scheme: dark){
+    :root:not([data-theme="light"]){
+      --bg:#12181B;
+      --panel:#182225;
+      --ink:#E7EEEA;
+      --muted:#93A39D;
+      --line:#33413D;
+      --accent:#E2934F;
+      --stream-jet:#6FA3D9;
+      --stream-trk:#5FC2B6;
+      --stream-evt:#B198D6;
+    }
+  }
+  :root[data-theme="dark"]{
+    --bg:#12181B;
+    --panel:#182225;
+    --ink:#E7EEEA;
+    --muted:#93A39D;
+    --line:#33413D;
+    --accent:#E2934F;
+    --stream-jet:#6FA3D9;
+    --stream-trk:#5FC2B6;
+    --stream-evt:#B198D6;
+  }
+
+  body{
+    background:var(--bg);
+    color:var(--ink);
+    font-family:'IBM Plex Sans','Segoe UI',system-ui,sans-serif;
+    padding-inline:24px;
+    padding-block:40px 64px;
+  }
+  .wrap{ max-width:1180px; margin:0 auto; }
+  .mono{ font-family:'IBM Plex Mono','SFMono-Regular',Consolas,monospace; }
+
+  header h1{
+    font-size:clamp(1.6rem,3vw,2.1rem);
+    font-weight:700;
+    letter-spacing:-0.01em;
+    text-wrap:balance;
+    margin:0 0 10px;
+  }
+  header p.lede{
+    max-width:62ch;
+    color:var(--muted);
+    font-size:1rem;
+    line-height:1.55;
+    margin:0 0 26px;
+  }
+
+  .stats{
+    display:flex;
+    flex-wrap:wrap;
+    gap:10px;
+    margin:0 0 34px;
+  }
+  .stat{
+    background:var(--panel);
+    border:1px solid var(--line);
+    border-radius:8px;
+    padding:8px 14px;
+    display:flex;
+    flex-direction:column;
+    gap:2px;
+    min-width:108px;
+  }
+  .stat .v{ font-family:'IBM Plex Mono',monospace; font-size:1.05rem; font-weight:500; }
+  .stat .k{ font-size:0.7rem; color:var(--muted); text-transform:uppercase; letter-spacing:0.06em; }
+
+  .legend{
+    display:flex;
+    flex-wrap:wrap;
+    align-items:center;
+    gap:20px;
+    background:var(--panel);
+    border:1px solid var(--line);
+    border-radius:10px;
+    padding:14px 18px;
+    margin:0 0 40px;
+    font-size:0.85rem;
+    color:var(--muted);
+  }
+  .legend .item{ display:flex; align-items:center; gap:8px; }
+  .legend .dot{ width:11px; height:11px; border-radius:50%; flex:none; }
+  .legend .plus{
+    width:15px; height:15px; border-radius:50%; flex:none;
+    border:1.6px solid var(--accent);
+    display:flex; align-items:center; justify-content:center;
+    font-size:10px; color:var(--accent); font-weight:700; line-height:1;
+  }
+
+  figure{
+    margin:0 0 46px;
+    background:var(--panel);
+    border:1px solid var(--line);
+    border-radius:14px;
+    padding:22px 22px 18px;
+  }
+  figure h2{
+    font-size:1.05rem;
+    font-weight:600;
+    margin:0 0 4px;
+  }
+  figure .eyebrow{
+    font-size:0.72rem;
+    text-transform:uppercase;
+    letter-spacing:0.08em;
+    color:var(--accent);
+    font-weight:600;
+    margin:0 0 6px;
+  }
+  .scroll{
+    overflow-x:auto;
+    margin:14px 0 4px;
+  }
+  figcaption{
+    font-size:0.88rem;
+    color:var(--muted);
+    line-height:1.5;
+    max-width:78ch;
+  }
+
+  svg text{ font-family:'IBM Plex Sans',sans-serif; }
+  svg text.mono{ font-family:'IBM Plex Mono',monospace; }
+  svg .box{ fill:var(--panel); stroke:var(--line); stroke-width:1.5; }
+  svg .box-title{ fill:var(--ink); font-size:13px; font-weight:600; }
+  svg .box-sub{ fill:var(--muted); font-size:10.5px; }
+  svg .note{ fill:var(--muted); font-size:10.5px; font-style:italic; }
+  svg .arrow-label{ fill:var(--muted); font-size:10px; }
+  svg .chip-label{ fill:var(--ink); font-size:11px; }
+  svg .out-label{ fill:var(--ink); font-size:11px; font-weight:600; }
+  svg .final-box{ fill:var(--panel); stroke:var(--accent); stroke-width:2; }
+  svg .final-label{ fill:var(--accent); font-size:13px; font-weight:700; }
+  svg line.conn{ stroke:var(--line); stroke-width:1.5; }
+  svg path.skip{ fill:none; stroke:var(--accent); stroke-width:1.4; stroke-dasharray:4 3; opacity:0.85; }
+  svg circle.plus{ fill:var(--panel); stroke:var(--accent); stroke-width:2; }
+  svg text.plus-sym{ fill:var(--accent); font-size:14px; font-weight:700; }
+  svg circle.junction{ fill:var(--ink); }
+
+  footer{
+    margin-top:8px;
+    padding-top:22px;
+    border-top:1px solid var(--line);
+    font-size:0.85rem;
+    color:var(--muted);
+    line-height:1.6;
+    max-width:80ch;
+  }
+  footer strong{ color:var(--ink); }
+
+  @media (max-width:640px){
+    figure{ padding:16px 14px 14px; }
+  }
+</style>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap">
+
+<div class="wrap">
+
+  <header>
+    <h1>Polarimeter Attention Net</h1>
+    <p class="lede">How the top-polarimetry regression model turns a reconstructed probe jet, its tracks, and the surrounding event into a predicted cos&nbsp;&theta; &mdash; the polarimetric angle that carries the top quark's spin information.</p>
+    <div class="stats">
+      <div class="stat"><span class="v mono">64</span><span class="k">embed_dim</span></div>
+      <div class="stat"><span class="v mono">4</span><span class="k">heads</span></div>
+      <div class="stat"><span class="v mono">5</span><span class="k">stacks</span></div>
+      <div class="stat"><span class="v mono">20</span><span class="k">attention blocks</span></div>
+      <div class="stat"><span class="v mono">435,586</span><span class="k">parameters</span></div>
+    </div>
+    <div class="legend">
+      <div class="item"><span class="dot" style="background:var(--stream-jet)"></span>probe jet &mdash; <span class="mono">[1,&thinsp;E]</span></div>
+      <div class="item"><span class="dot" style="background:var(--stream-trk)"></span>constituent tracks &mdash; <span class="mono">[200,&thinsp;E]</span></div>
+      <div class="item"><span class="dot" style="background:var(--stream-evt)"></span>event tensor &mdash; <span class="mono">[213,&thinsp;E]</span></div>
+      <div class="item"><span class="plus">+</span>residual (skip) connection</div>
+    </div>
+  </header>
+
+  <!-- FIGURE 1: full pipeline -->
+  <figure>
+    <div class="eyebrow">Top level</div>
+    <h2>Three streams, two shared stacks, two heads</h2>
+    <div class="scroll">
+      <svg viewBox="0 0 1560 420" width="1560" height="420" role="img"
+           aria-label="The model embeds the probe jet, its tracks, and the event, refines them through two shared attention Stacks, then splits into a one-stack Top branch and a two-stack Quark branch whose jet embeddings are concatenated and regressed to a single cos theta value.">
+        <defs>
+          <marker id="a-ink" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+            <path d="M0,0 L10,5 L0,10 z" fill="var(--ink)"/>
+          </marker>
+          <marker id="a-jet" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+            <path d="M0,0 L10,5 L0,10 z" fill="var(--stream-jet)"/>
+          </marker>
+          <marker id="a-accent" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+            <path d="M0,0 L10,5 L0,10 z" fill="var(--accent)"/>
+          </marker>
+        </defs>
+
+        <!-- input chips -->
+        <g>
+          <rect x="10" y="235" width="120" height="26" rx="5" fill="none" stroke="var(--stream-jet)" stroke-width="1.4"/>
+          <text x="70" y="252" text-anchor="middle" class="chip-label mono">[1,4]</text>
+          <rect x="10" y="257" width="120" height="26" rx="5" fill="none" stroke="var(--stream-trk)" stroke-width="1.4"/>
+          <text x="70" y="274" text-anchor="middle" class="chip-label mono">[200,4]</text>
+          <rect x="10" y="279" width="120" height="26" rx="5" fill="none" stroke="var(--stream-evt)" stroke-width="1.4"/>
+          <text x="70" y="296" text-anchor="middle" class="chip-label mono">[213,4]</text>
+          <text x="70" y="228" text-anchor="middle" class="box-sub">probe_jet / constituents / event</text>
+        </g>
+
+        <!-- connectors input->embed -->
+        <line x1="130" y1="248" x2="150" y2="248" class="conn" style="stroke:var(--stream-jet)"/>
+        <line x1="130" y1="270" x2="150" y2="270" class="conn" style="stroke:var(--stream-trk)"/>
+        <line x1="130" y1="292" x2="150" y2="292" class="conn" style="stroke:var(--stream-evt)"/>
+
+        <!-- Embed box -->
+        <rect x="150" y="225" width="120" height="90" rx="10" class="box"/>
+        <text x="210" y="264" text-anchor="middle" class="box-title">Embed</text>
+        <text x="210" y="280" text-anchor="middle" class="box-sub mono">Linear(4&#8594;E)</text>
+        <text x="210" y="292" text-anchor="middle" class="box-sub">+GELU, per stream</text>
+
+        <!-- Embed -> Stack1 -->
+        <line x1="270" y1="248" x2="300" y2="248" class="conn" style="stroke:var(--stream-jet)"/>
+        <line x1="270" y1="270" x2="300" y2="270" class="conn" style="stroke:var(--stream-trk)"/>
+        <line x1="270" y1="292" x2="300" y2="292" class="conn" style="stroke:var(--stream-evt)"/>
+
+        <!-- Stack1 -->
+        <rect x="300" y="225" width="130" height="90" rx="10" class="box"/>
+        <text x="365" y="262" text-anchor="middle" class="box-title">Stack 1</text>
+        <text x="365" y="278" text-anchor="middle" class="box-sub">4&#215; Encoder</text>
+        <text x="365" y="292" text-anchor="middle" class="box-sub">(shared)</text>
+        <path class="skip" d="M300,248 Q365,176 490,248"/>
+        <path class="skip" d="M300,270 Q365,164 490,270"/>
+        <path class="skip" d="M300,292 Q365,152 490,292"/>
+        <line x1="430" y1="248" x2="477" y2="248" class="conn" style="stroke:var(--stream-jet)"/>
+        <line x1="430" y1="270" x2="477" y2="270" class="conn" style="stroke:var(--stream-trk)"/>
+        <line x1="430" y1="292" x2="477" y2="292" class="conn" style="stroke:var(--stream-evt)"/>
+        <circle cx="490" cy="248" r="13" class="plus"/><text x="490" y="253" text-anchor="middle" class="plus-sym">+</text>
+        <circle cx="490" cy="270" r="13" class="plus"/><text x="490" y="275" text-anchor="middle" class="plus-sym">+</text>
+        <circle cx="490" cy="292" r="13" class="plus"/><text x="490" y="297" text-anchor="middle" class="plus-sym">+</text>
+
+        <!-- Stack1 -> Stack2 -->
+        <line x1="503" y1="248" x2="530" y2="248" class="conn" style="stroke:var(--stream-jet)"/>
+        <line x1="503" y1="270" x2="530" y2="270" class="conn" style="stroke:var(--stream-trk)"/>
+        <line x1="503" y1="292" x2="530" y2="292" class="conn" style="stroke:var(--stream-evt)"/>
+
+        <!-- Stack2 -->
+        <rect x="530" y="225" width="130" height="90" rx="10" class="box"/>
+        <text x="595" y="262" text-anchor="middle" class="box-title">Stack 2</text>
+        <text x="595" y="278" text-anchor="middle" class="box-sub">4&#215; Encoder</text>
+        <text x="595" y="292" text-anchor="middle" class="box-sub">(shared)</text>
+        <path class="skip" d="M530,248 Q595,176 720,248"/>
+        <path class="skip" d="M530,270 Q595,164 720,270"/>
+        <path class="skip" d="M530,292 Q595,152 720,292"/>
+        <line x1="660" y1="248" x2="707" y2="248" class="conn" style="stroke:var(--stream-jet)"/>
+        <line x1="660" y1="270" x2="707" y2="270" class="conn" style="stroke:var(--stream-trk)"/>
+        <line x1="660" y1="292" x2="707" y2="292" class="conn" style="stroke:var(--stream-evt)"/>
+        <circle cx="720" cy="248" r="13" class="plus"/><text x="720" y="253" text-anchor="middle" class="plus-sym">+</text>
+        <circle cx="720" cy="270" r="13" class="plus"/><text x="720" y="275" text-anchor="middle" class="plus-sym">+</text>
+        <circle cx="720" cy="292" r="13" class="plus"/><text x="720" y="297" text-anchor="middle" class="plus-sym">+</text>
+
+        <!-- fork -->
+        <line x1="733" y1="248" x2="760" y2="248" class="conn" style="stroke:var(--stream-jet)"/>
+        <line x1="733" y1="270" x2="760" y2="270" class="conn" style="stroke:var(--stream-trk)"/>
+        <line x1="733" y1="292" x2="760" y2="292" class="conn" style="stroke:var(--stream-evt)"/>
+        <circle cx="760" cy="248" r="4.5" class="junction"/>
+        <circle cx="760" cy="270" r="4.5" class="junction"/>
+        <circle cx="760" cy="292" r="4.5" class="junction"/>
+        <text x="760" y="220" text-anchor="middle" class="arrow-label">split</text>
+
+        <!-- up to Stack Top -->
+        <path d="M760,248 C775,248 775,78 790,78" fill="none" style="stroke:var(--stream-jet)" stroke-width="1.5"/>
+        <path d="M760,270 C778,270 778,100 790,100" fill="none" style="stroke:var(--stream-trk)" stroke-width="1.5"/>
+        <path d="M760,292 C780,292 780,122 790,122" fill="none" style="stroke:var(--stream-evt)" stroke-width="1.5"/>
+
+        <!-- Stack Top -->
+        <rect x="790" y="55" width="130" height="90" rx="10" class="box"/>
+        <text x="855" y="92" text-anchor="middle" class="box-title">Stack Top</text>
+        <text x="855" y="108" text-anchor="middle" class="box-sub">4&#215; Encoder</text>
+        <path class="skip" d="M790,78 Q855,20 980,78"/>
+        <line x1="920" y1="78" x2="967" y2="78" class="conn" style="stroke:var(--stream-jet)"/>
+        <circle cx="980" cy="78" r="13" class="plus"/><text x="980" y="83" text-anchor="middle" class="plus-sym">+</text>
+        <text x="855" y="163" text-anchor="middle" class="note">tracks / event dropped after this stack</text>
+
+        <!-- Stack Q1 -->
+        <rect x="790" y="225" width="130" height="90" rx="10" class="box"/>
+        <text x="855" y="262" text-anchor="middle" class="box-title">Stack Q1</text>
+        <text x="855" y="278" text-anchor="middle" class="box-sub">4&#215; Encoder</text>
+        <path class="skip" d="M790,248 Q855,176 950,248"/>
+        <path class="skip" d="M790,270 Q855,164 950,270"/>
+        <path class="skip" d="M790,292 Q855,152 950,292"/>
+        <line x1="920" y1="248" x2="937" y2="248" class="conn" style="stroke:var(--stream-jet)"/>
+        <line x1="920" y1="270" x2="937" y2="270" class="conn" style="stroke:var(--stream-trk)"/>
+        <line x1="920" y1="292" x2="937" y2="292" class="conn" style="stroke:var(--stream-evt)"/>
+        <circle cx="950" cy="248" r="13" class="plus"/><text x="950" y="253" text-anchor="middle" class="plus-sym">+</text>
+        <circle cx="950" cy="270" r="13" class="plus"/><text x="950" y="275" text-anchor="middle" class="plus-sym">+</text>
+        <circle cx="950" cy="292" r="13" class="plus"/><text x="950" y="297" text-anchor="middle" class="plus-sym">+</text>
+
+        <!-- Q1 -> Q2 -->
+        <line x1="963" y1="248" x2="990" y2="248" class="conn" style="stroke:var(--stream-jet)"/>
+        <line x1="963" y1="270" x2="990" y2="270" class="conn" style="stroke:var(--stream-trk)"/>
+        <line x1="963" y1="292" x2="990" y2="292" class="conn" style="stroke:var(--stream-evt)"/>
+
+        <!-- Stack Q2 -->
+        <rect x="990" y="225" width="130" height="90" rx="10" class="box"/>
+        <text x="1055" y="262" text-anchor="middle" class="box-title">Stack Q2</text>
+        <text x="1055" y="278" text-anchor="middle" class="box-sub">4&#215; Encoder</text>
+        <path class="skip" d="M990,248 Q1055,180 1150,248"/>
+        <line x1="1120" y1="248" x2="1137" y2="248" class="conn" style="stroke:var(--stream-jet)"/>
+        <circle cx="1150" cy="248" r="13" class="plus"/><text x="1150" y="253" text-anchor="middle" class="plus-sym">+</text>
+        <text x="1055" y="303" text-anchor="middle" class="note">tracks / event dropped after this stack</text>
+
+        <!-- converge to concat -->
+        <path d="M993,78 L1120,78 C1175,78 1210,120 1230,158" fill="none" style="stroke:var(--stream-jet)" stroke-width="1.5" marker-end="url(#a-jet)"/>
+        <text x="1090" y="70" text-anchor="middle" class="arrow-label">squeeze &#8594; [E]</text>
+        <path d="M1163,248 C1200,248 1215,215 1228,200" fill="none" style="stroke:var(--stream-jet)" stroke-width="1.5" marker-end="url(#a-jet)"/>
+        <text x="1195" y="238" text-anchor="middle" class="arrow-label">squeeze &#8594; [E]</text>
+
+        <!-- Concat -->
+        <rect x="1230" y="140" width="70" height="80" rx="10" class="box"/>
+        <text x="1265" y="176" text-anchor="middle" class="box-title" font-size="12">Concat</text>
+        <text x="1265" y="192" text-anchor="middle" class="box-sub mono">[2E]</text>
+
+        <line x1="1300" y1="180" x2="1330" y2="180" class="conn" style="stroke:var(--stream-jet)"/>
+
+        <!-- MLP -->
+        <rect x="1330" y="145" width="110" height="70" rx="10" class="box"/>
+        <text x="1385" y="176" text-anchor="middle" class="box-title" font-size="12">Linear&#8594;GELU</text>
+        <text x="1385" y="192" text-anchor="middle" class="box-title" font-size="12">&#8594;Linear</text>
+
+        <line x1="1440" y1="180" x2="1460" y2="180" class="conn" style="stroke:var(--accent)" marker-end="url(#a-accent)"/>
+
+        <!-- Output -->
+        <rect x="1460" y="152" width="90" height="56" rx="10" class="final-box"/>
+        <text x="1505" y="177" text-anchor="middle" class="final-label">cos&#952;</text>
+        <text x="1505" y="194" text-anchor="middle" class="box-sub mono">[2]</text>
+      </svg>
+    </div>
+    <figcaption>The probe jet, its tracks, and the event each get embedded, then run through two shared attention Stacks. The three streams then <strong>split</strong>: a shallow, one-Stack &ldquo;Top&rdquo; path and a deeper, two-Stack &ldquo;Quark&rdquo; path each produce their own refined jet embedding. Both are concatenated and passed through a small MLP to regress the final (cos&nbsp;&theta;, sin&nbsp;&theta;) output.</figcaption>
+  </figure>
+
+  <!-- FIGURE 2: Encoder detail -->
+  <figure>
+    <div class="eyebrow">Building block</div>
+    <h2>Encoder &mdash; the attention unit used everywhere</h2>
+    <div class="scroll">
+      <svg viewBox="0 0 1060 340" width="1060" height="340" role="img"
+           aria-label="One Encoder block independently layer-normalizes Query, Key, and Value, runs multi-head attention, then applies two residual connections around a normalization and a feed-forward layer.">
+        <defs>
+          <marker id="b-accent" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+            <path d="M0,0 L10,5 L0,10 z" fill="var(--accent)"/>
+          </marker>
+        </defs>
+
+        <!-- Q K V inputs -->
+        <text x="55" y="66" text-anchor="middle" class="out-label" style="fill:var(--accent)">Q</text>
+        <text x="55" y="166" text-anchor="middle" class="out-label" style="fill:var(--muted)">K</text>
+        <text x="55" y="266" text-anchor="middle" class="out-label" style="fill:var(--muted)">V</text>
+        <line x1="70" y1="70" x2="120" y2="70" class="conn" style="stroke:var(--accent)"/>
+        <line x1="70" y1="170" x2="120" y2="170" class="conn" style="stroke:var(--muted)"/>
+        <line x1="70" y1="270" x2="120" y2="270" class="conn" style="stroke:var(--muted); stroke-dasharray:5 3"/>
+
+        <rect x="120" y="48" width="100" height="44" rx="8" class="box"/>
+        <text x="170" y="75" text-anchor="middle" class="box-title" font-size="11.5">LayerNorm</text>
+        <rect x="120" y="148" width="100" height="44" rx="8" class="box"/>
+        <text x="170" y="175" text-anchor="middle" class="box-title" font-size="11.5">LayerNorm</text>
+        <rect x="120" y="248" width="100" height="44" rx="8" class="box"/>
+        <text x="170" y="275" text-anchor="middle" class="box-title" font-size="11.5">LayerNorm</text>
+
+        <line x1="220" y1="70" x2="280" y2="70" class="conn" style="stroke:var(--accent)"/>
+        <line x1="220" y1="170" x2="280" y2="170" class="conn" style="stroke:var(--muted)"/>
+        <line x1="220" y1="270" x2="280" y2="270" class="conn" style="stroke:var(--muted); stroke-dasharray:5 3"/>
+
+        <rect x="280" y="40" width="180" height="260" rx="12" class="box"/>
+        <text x="370" y="160" text-anchor="middle" class="box-title">Multi-Head</text>
+        <text x="370" y="178" text-anchor="middle" class="box-title">Attention</text>
+        <text x="370" y="196" text-anchor="middle" class="box-sub mono">heads=4, dropout .25</text>
+
+        <line x1="460" y1="170" x2="500" y2="170" class="conn"/>
+        <rect x="500" y="148" width="100" height="44" rx="8" class="box"/>
+        <text x="550" y="175" text-anchor="middle" class="box-title" font-size="11.5">LayerNorm</text>
+
+        <path class="skip" d="M220,70 C380,10 540,90 650,157"/>
+        <text x="430" y="42" text-anchor="middle" class="arrow-label">residual (normed Q)</text>
+        <line x1="600" y1="170" x2="637" y2="170" class="conn"/>
+        <circle cx="650" cy="170" r="14" class="plus"/><text x="650" y="175" text-anchor="middle" class="plus-sym">+</text>
+
+        <line x1="664" y1="170" x2="700" y2="170" class="conn"/>
+        <rect x="700" y="140" width="130" height="60" rx="10" class="box"/>
+        <text x="765" y="174" text-anchor="middle" class="box-title" font-size="12">Linear &#8594; GELU</text>
+
+        <path class="skip" d="M664,170 Q765,110 890,170"/>
+        <line x1="830" y1="170" x2="877" y2="170" class="conn"/>
+        <circle cx="890" cy="170" r="14" class="plus"/><text x="890" y="175" text-anchor="middle" class="plus-sym">+</text>
+
+        <line x1="904" y1="170" x2="960" y2="170" class="conn" marker-end="url(#b-accent)" style="stroke:var(--accent)"/>
+        <text x="1005" y="165" text-anchor="middle" class="out-label">latent</text>
+        <text x="1005" y="180" text-anchor="middle" class="box-sub mono">= shape(Q)</text>
+      </svg>
+    </div>
+    <figcaption>Every attention call in the model &mdash; self or cross &mdash; is this same block. Query, Key and Value are normalized independently before attention; the first residual adds back the <em>normalized</em> query (not the raw input), and a second residual wraps a single-layer feed-forward.</figcaption>
+  </figure>
+
+  <!-- FIGURE 3: Stack detail -->
+  <figure>
+    <div class="eyebrow">Building block</div>
+    <h2>Stack &mdash; how the jet token gathers context</h2>
+    <div class="scroll">
+      <svg viewBox="0 0 1180 340" width="1180" height="340" role="img"
+           aria-label="Inside a Stack, the constituent tracks self-attend first, then the jet cross-attends to those updated tracks, then the event self-attends, then the jet cross-attends again to the updated event, producing the Stack's final jet output while unmodified track and event embeddings pass through.">
+        <!-- lane labels -->
+        <text x="55" y="66" text-anchor="middle" class="out-label" style="fill:var(--stream-jet)">jet</text>
+        <text x="55" y="166" text-anchor="middle" class="out-label" style="fill:var(--stream-trk)">trk</text>
+        <text x="55" y="266" text-anchor="middle" class="out-label" style="fill:var(--stream-evt)">evt</text>
+
+        <!-- straight lane lines (drawn first, boxes sit on top) -->
+        <line x1="110" y1="70" x2="1050" y2="70" class="conn" style="stroke:var(--stream-jet)"/>
+        <line x1="110" y1="170" x2="1050" y2="170" class="conn" style="stroke:var(--stream-trk)"/>
+        <line x1="110" y1="270" x2="1050" y2="270" class="conn" style="stroke:var(--stream-evt)"/>
+
+        <!-- stage 1: constituents self-attn -->
+        <rect x="200" y="140" width="130" height="60" rx="10" class="box"/>
+        <text x="265" y="166" text-anchor="middle" class="box-title" font-size="12">Encoder</text>
+        <text x="265" y="182" text-anchor="middle" class="box-sub">self: tracks</text>
+
+        <!-- stage 2: jet <- tracks (local) -->
+        <rect x="400" y="40" width="130" height="60" rx="10" class="box"/>
+        <text x="465" y="66" text-anchor="middle" class="box-title" font-size="12">Encoder</text>
+        <text x="465" y="82" text-anchor="middle" class="box-sub">jet &#8592; tracks</text>
+        <path d="M415,170 L415,100" fill="none" style="stroke:var(--stream-trk)" stroke-width="1.5"/>
+        <circle cx="415" cy="170" r="3.5" class="junction" style="fill:var(--stream-trk)"/>
+        <text x="415" y="116" text-anchor="middle" class="arrow-label">K,V</text>
+
+        <!-- stage 3: event self-attn -->
+        <rect x="600" y="240" width="130" height="60" rx="10" class="box"/>
+        <text x="665" y="266" text-anchor="middle" class="box-title" font-size="12">Encoder</text>
+        <text x="665" y="282" text-anchor="middle" class="box-sub">self: event</text>
+
+        <!-- stage 4: jet <- event (global) -->
+        <rect x="800" y="40" width="130" height="60" rx="10" class="box"/>
+        <text x="865" y="66" text-anchor="middle" class="box-title" font-size="12">Encoder</text>
+        <text x="865" y="82" text-anchor="middle" class="box-sub">jet &#8592; event</text>
+        <path d="M815,270 L815,100" fill="none" style="stroke:var(--stream-evt)" stroke-width="1.5"/>
+        <circle cx="815" cy="270" r="3.5" class="junction" style="fill:var(--stream-evt)"/>
+        <text x="815" y="230" text-anchor="middle" class="arrow-label">K,V</text>
+
+        <!-- output tags -->
+        <rect x="1050" y="55" width="120" height="30" rx="7" class="final-box"/>
+        <text x="1110" y="75" text-anchor="middle" class="final-label" font-size="11.5">jet_out</text>
+        <rect x="1050" y="155" width="120" height="30" rx="7" fill="none" stroke="var(--stream-trk)" stroke-width="1.4"/>
+        <text x="1110" y="175" text-anchor="middle" class="box-title" font-size="11.5">trk_out</text>
+        <rect x="1050" y="255" width="120" height="30" rx="7" fill="none" stroke="var(--stream-evt)" stroke-width="1.4"/>
+        <text x="1110" y="275" text-anchor="middle" class="box-title" font-size="11.5">evt_out</text>
+
+        <text x="265" y="120" text-anchor="middle" class="arrow-label">1</text>
+        <text x="465" y="30" text-anchor="middle" class="arrow-label">2</text>
+        <text x="665" y="320" text-anchor="middle" class="arrow-label">3</text>
+        <text x="865" y="30" text-anchor="middle" class="arrow-label">4</text>
+      </svg>
+    </div>
+    <figcaption>Order matters: (1) tracks self-attend first, (2) the jet locally cross-attends to those <em>already-updated</em> tracks, (3) the event self-attends, (4) the jet globally cross-attends to the <em>already-updated</em> event. Only the jet lane is refined twice; the track and event lanes pass through unchanged after their one self-attention step.</figcaption>
+  </figure>
+
+  <footer>
+    <strong>Note on naming:</strong> &ldquo;Stack Top&rdquo; and &ldquo;Stack Q1/Q2&rdquo; are a holdover from an earlier version of this model that regressed separate top-quark and down-quark four-vectors. In the current single-output model, both branches feed the same regression head &mdash; there's no longer a physically distinct &ldquo;Top&rdquo; vs. &ldquo;Quark&rdquo; output, just two differently-processed views of the jet embedding (one shallow, one deep) concatenated together.
+  </footer>
+
+</div>

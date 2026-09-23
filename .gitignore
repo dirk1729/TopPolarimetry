@@ -10,3 +10,7 @@ madgraph/pp_tt_semi_full*
 model/WS*
 *__pycache__
 *.pt
+
+training
+data
+.claude

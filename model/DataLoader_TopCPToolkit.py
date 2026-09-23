@@ -53,6 +53,16 @@ class CustomDataset(Dataset):
         return len(self.probe_jet)
 
 
+# Branches read from the ntuple store pT/mass/E/MET in MeV (O(1e4-1e5)),
+# while eta/phi/charge are O(1). Fed raw into the model's shared
+# nn.Linear(4, embed_dim) initializers, that scale mismatch lets the
+# pT-like column dominate the embedding and drown out the angular features
+# that actually carry the costheta signal. PT_SCALE rescales every
+# pT/mass/MET feature to roughly the same O(1) order as eta/phi/q, in units
+# of 100 GeV, before it reaches the model.
+PT_SCALE = 1e5  # 100 GeV, in MeV
+
+
 def compute_jet_mass(pt, eta, phi, e):
     px = pt * np.cos(phi)
     py = pt * np.sin(phi)
@@ -110,6 +120,15 @@ def load_file(file):
     t_isHadronic = t_isHadronic[keep]
 
     jet_mass = compute_jet_mass(jet_pt, jet_eta, jet_phi, jet_e)
+
+    # Normalize pT/mass/MET features to O(1) (see PT_SCALE above). Must happen
+    # after compute_jet_mass, which needs jet_pt/jet_e in their raw MeV units.
+    jet_pt = jet_pt / PT_SCALE
+    jet_mass = jet_mass / PT_SCALE
+    trk_pt = trk_pt / PT_SCALE
+    el_pt = el_pt / PT_SCALE
+    mu_pt = mu_pt / PT_SCALE
+    met = met / PT_SCALE
 
     # select the probe jet (down-type-quark-matched) per event
     probe_mask = ak.local_index(jet_pt) == jet_idx_down_from_thad
@@ -198,8 +217,11 @@ def load_file(file):
 
 
 if __name__ == "__main__":
+    import os
+
     in_file = str(sys.argv[1])
     out_file = str(sys.argv[2])
 
     dset = CustomDataset(in_file)
+    os.makedirs(os.path.dirname(out_file) or ".", exist_ok=True)
     torch.save(dset, out_file)

@@ -10,11 +10,11 @@ import matplotlib.colors as mcolors
 from sklearn.metrics import mean_absolute_error, root_mean_squared_error, r2_score, roc_auc_score
 import sys
 from new_model import *
-from DataLoader_Parallel import CustomDataset
+from DataLoader_TopCPToolkit import CustomDataset
 
-model_path = "WS_U_10M/training_All_Tasks_Boost_tRest_Bottom_cosSim_10M_140epoch_64embed/models/model_Epoch_103.torch"
-dir_training="WS_U_10M/training_All_Tasks_Boost_tRest_Bottom_cosSim_10M_140epoch_64embed"
-dir_dataset="WS_U_10M/datasets_AllFrame"
+dir_dataset = str(sys.argv[1])
+dir_training = str(sys.argv[2])
+model_path = str(sys.argv[3])
 
 batch_size=256
 
@@ -41,46 +41,21 @@ def calc_norm(y_pred):
     y_pred_norm = torch.div(y_pred, norm)
     return y_pred_norm
 
-top_feats=4
-pred_top = np.array([]).reshape(0,top_feats)
-true_top = np.array([]).reshape(0,top_feats)
-
-quark_feats=3
-pred_quark = np.array([]).reshape(0,quark_feats)
-true_quark = np.array([]).reshape(0,quark_feats)
-
 direct_feats=1
 pred_direct = np.array([]).reshape(0,direct_feats)
 true_direct = np.array([]).reshape(0,direct_feats)
 
-for probe_jet, constituents, event, top_labels, down_labels, bottom_labels, direct_labels, track_labels in test_loader:
-    top_pred, quark_pred, direct_pred, track_pred = model(probe_jet.to(device), constituents.to(device), event.to(device))
+for probe_jet, constituents, event, costheta_labels, track_labels in test_loader:
+    costheta_pred = model(probe_jet.to(device), constituents.to(device), event.to(device))
 
-    quark_pred = calc_norm(quark_pred)
-    direct_pred = calc_norm(direct_pred)
+    costheta_pred = calc_norm(costheta_pred)
 
-    pred_top = np.vstack((pred_top,top_pred.detach().cpu().numpy()))
-    true_top = np.vstack((true_top,top_labels.detach().cpu().numpy()))
-
-    pred_quark = np.vstack((pred_quark,quark_pred.detach().cpu().numpy()))
-    true_quark = np.vstack((true_quark,bottom_labels.detach().cpu().numpy()))
-
-    pred_direct = np.vstack((pred_direct,direct_pred[:,0].reshape(-1,1).detach().cpu().numpy()))
-    true_direct = np.vstack((true_direct,direct_labels[:,1].reshape(-1,1).detach().cpu().numpy()))
+    pred_direct = np.vstack((pred_direct,costheta_pred[:,0].reshape(-1,1).detach().cpu().numpy()))
+    true_direct = np.vstack((true_direct,costheta_labels[:,0].reshape(-1,1).detach().cpu().numpy()))
 
 def validate_predictions(true, pred, var_names):
     num_feats = len(var_names)
-    ranges_dict = {"top_px": (-1000,1000),
-                   "top_py": (-1000,1000),
-                   "top_pz": (-1000,1000),
-                   "top_e" : (0,1500),
-                   "down_px": (-1.1,1.1),
-                   "down_py": (-1.1,1.1),
-                   "down_pz": (-1.1,1.1),
-                   "bottom_px": (-1.1,1.1),
-                   "bottom_py": (-1.1,1.1),
-                   "bottom_pz": (-1.1,1.1),
-                   "costheta": (-1.1,1.1)}
+    ranges_dict = {"costheta": (-1.1,1.1)}
 
     for i ,var in enumerate(var_names):
         var_range = ranges_dict[var]
@@ -110,7 +85,4 @@ def validate_predictions(true, pred, var_names):
         #plt.show()
         plt.close()
 
-validate_predictions(true_top, pred_top, ["top_px", "top_py", "top_pz", "top_e"])
-#validate_predictions(true_down, pred_down, ["down_px", "down_py", "down_pz"])
-validate_predictions(true_quark, pred_quark, ["bottom_px", "bottom_py", "bottom_pz"])
 validate_predictions(true_direct, pred_direct, ["costheta"])

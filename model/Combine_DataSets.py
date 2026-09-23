@@ -2,7 +2,7 @@ import torch
 from torch.utils.data import Dataset, DataLoader, ConcatDataset
 import sys
 
-from DataLoader_Parallel import CustomDataset
+from DataLoader_TopCPToolkit import CustomDataset
 
 tag = str(sys.argv[1])
 num_files = int(sys.argv[2])
