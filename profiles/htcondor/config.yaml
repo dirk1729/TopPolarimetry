@@ -1,0 +1,15 @@
+# Snakemake >= 8 profile for HTCondor (CERN lxplus batch).
+# Needs: pip install snakemake-executor-plugin-cluster-generic
+# Usage (from the repo root):  snakemake --profile profiles/htcondor [target]
+executor: cluster-generic
+cluster-generic-submit-cmd: "condor_submit.py"
+cluster-generic-status-cmd: "condor_status.py"
+cluster-generic-cancel-cmd: "condor_rm"
+jobs: 200
+# AFS/EOS can take a while to show files written on a worker node
+latency-wait: 120
+max-status-checks-per-second: 1
+retries: 1
+rerun-incomplete: true
+keep-going: true
+printshellcmds: true

@@ -1,43 +1,86 @@
 ## Quick Start
 Clone the repo:
 ```
-git clone --recursive git@github.com:LukeV37/Top_Polarimetry.git
+git clone https://github.com/dirk1729/TopPolarimetry.git
 ```
-
-Ensure dependencies are met, and install the submodules:
-```
-./build_submodules.sh
-```
-
-Please be patient while submodules build...
 
 ## How To Generate Datasets
 
-### Madgraph
-To run madgraph simulation, run the following
-```
-cd madgraph
-./run.sh
-./post_process.sh
-```
-The lhe file file is generated, and the training labels are written to root file. 
+Samples are produced by a Snakemake workflow (`Snakefile` + `configs/config.yaml`)
+that drives the full ATLAS MC chain — MadGraph+Pythia8 generation, Geant4
+simulation, digitization, reconstruction, and DAOD_PHYS derivation — via
+official ATLAS releases over CVMFS. There's nothing to build locally for
+this step; `asetup` resolves each release on demand.
 
-### Pythia
-To shower in pythia, run the following
+### Prerequisites
+- CVMFS access to `/cvmfs/atlas.cern.ch` (ATLASLocalRootBase), and an `el9`
+  host or `apptainer` available — the workflow runs each stage inside an
+  `el9` container by default (set `container: none` in `configs/config.yaml`
+  to run natively on an already-el9 host).
+- `snakemake` (e.g. `pip install snakemake` inside a conda env).
+
+### Configure
+Edit `configs/config.yaml`:
+- `polarizations`: which of `U` / `L` / `R` to produce.
+- `splitting`: `nJobs` and `eventsPerJob` per polarization.
+- each stage's `asetupRelease`, plus simulation's `conditionsTag` /
+  `geometryVersion` / `simulator` / `physicsList`.
+- `paths.storage_base`: set this to move bulky outputs (EVNT/HITS/RDO/AOD)
+  outside the repo, e.g. onto EOS; job options and `MCValidation` always
+  stay local.
+
+### Run
 ```
-cd pythia
-./run.sh
+snakemake --cores <N> daod_phys
 ```
-The training data will be written to a root file. 
+produces `Derivation/<pol>_ttbar_PHYS/DAOD_PHYS.mcval.pool.root` for each
+configured polarization — the file the TopCPToolkit step below consumes.
+
+Other useful targets:
+- `snakemake --cores <N> daod_files` — just TRUTH1/TRUTH3 from EVNT
+  (skips the full Geant4 sim/digi/reco chain, much faster).
+- `snakemake --cores <N>` (or `... all`) — `daod_phys` plus the
+  truth-level `MCValidation` histograms.
+- A Snakemake profile for HTCondor batch submission is in
+  `profiles/htcondor/`.
+
+## How To Build & Run TopCPToolkit
+
+This turns a `DAOD_PHYS.mcval.pool.root` from the step above into the
+reco-level ntuple (`jet_constituent_trk_*`, `spin_MySpin_cos_theta_helicity_*`,
+etc.) that `model/DataLoader_TopCPToolkit.py` reads. It's a separate ATLAS
+analysis package (`TopPolarimetry`) layered onto the shared TopCPToolkit
+framework, both kept outside this repo's git history (`TopCPToolkit/` is
+gitignored) since they're independently-versioned CERN GitLab checkouts.
+
+1. Clone the framework:
+   ```
+   git clone https://gitlab.cern.ch/atlas/amg/software/TopCPToolkit.git
+   ```
+2. Inside `TopCPToolkit/source`, clone the analysis package:
+   ```
+   git clone https://gitlab.cern.ch/sbergner/toppolarimetry.git TopPolarimetry
+   ```
+3. Build, from the `TopCPToolkit/` top level:
+   ```
+   source source/TopPolarimetry/scripts/setup_stable.sh
+   source source/TopPolarimetry/scripts/full_compile.sh
+   ```
+   (`quick_compile.sh` for incremental rebuilds after editing existing
+   files; `setup_restore.sh` to restore a previously-built working area.)
+4. Run the event loop:
+   ```
+   runTop_el.py -t TopPolarimetry -p TopPolarimetry/configs mc/reco.yaml \
+       --inputFiles <DAOD_PHYS.mcval.pool.root> --submitDir run/<name>
+   ```
+   See `source/TopPolarimetry/README.md` and the
+   [TopCPToolkit docs](https://topcptoolkit.docs.cern.ch/latest/starting/installation/)
+   for the full option set.
 
 ## How To Run The Model (TopCPToolkit / Reco-Level Samples)
 
-This is a separate pipeline from the Madgraph/Pythia truth-level one
-above. It starts from a reco-level ROOT file already produced by running
-TopCPToolkit/TopPolarimetry's `reco.yaml` config over a DAOD_PHYS sample
-(that ATLAS-software build/run step is outside this repo and not covered
-here — see `model/DataLoader_TopCPToolkit.py`'s module docstring for the
-expected ntuple schema).
+Starting from a reco-level ROOT file produced above (or any file matching
+the schema in `model/DataLoader_TopCPToolkit.py`'s docstring):
 
 Activate the `toppol` conda environment and work from `model/`:
 ```
@@ -72,16 +115,12 @@ particular: pick a checkpoint from before the model overfits, not
 necessarily `model_final.torch` — `model/README.md` explains how).
 
 ## Dependencies
-Runs on most linux environments. Developed on Ubuntu 22.04.
+Developed on Ubuntu, using CVMFS-provided ATLAS software — there's no
+longer a local build step for the simulation chain itself.
 
-Required Dependencies:
 <ul>
-  <li>python3</li>
-  <li>ROOTv6</li>
-  <li>g++</li>
-  <li>gfortran</li>
-  <li>gzip</li>
-  <li>automake</li>
-  <li>libtool</li>
-  <li>autoconf</li>
+  <li>CVMFS access to <code>/cvmfs/atlas.cern.ch</code> (ATLASLocalRootBase), and <code>apptainer</code> or an el9 host</li>
+  <li>python3 + <code>snakemake</code>, for the dataset-generation workflow</li>
+  <li>conda, for the <code>toppol</code> environment the model pipeline runs in (PyTorch, uproot, awkward, scikit-learn, matplotlib)</li>
+  <li>CERN GitLab / Kerberos access, to clone TopCPToolkit and the TopPolarimetry analysis package</li>
 </ul>

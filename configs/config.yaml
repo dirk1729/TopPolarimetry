@@ -1,0 +1,78 @@
+# Which samples to produce
+# U: single NLO sample with top_left / top_right / central weight columns
+# L / R: legacy LO samples (separate polarized generate lines, no reweighting)
+polarizations:
+  # - U
+  - L
+  # - R
+
+# Job splitting: each polarization is produced as nJobs independent chains
+# (evgen -> sim -> digi -> reco), job j using seed randomSeed+j and events
+# starting at j*eventsPerJob+1. DAOD_PHYS and validation merge all jobs.
+splitting:
+  nJobs: 1
+  eventsPerJob: 10
+
+# Generation settings
+generation:
+  ecmEnergy: 13600.
+  randomSeed: 123456
+  asetupRelease: "AthGeneration,23.6.39"
+
+derivation:
+  asetupRelease: "Athena,24.0.62"
+
+# Full Geant4 sim/digi/reco settings for producing a real DAOD_PHYS from our
+# private EVNT (mc23e-like Run 3 conditions, matching the tags embedded in
+# the official mc23_13p6TeV.601229 PhPy8EG ttbar sample used to validate reco.yaml).
+# No pileup overlay in digitization (signal-only, prototyping).
+simulation:
+  asetupRelease: "Athena,24.0.62"
+  conditionsTag: "OFLCOND-MC23-SDR-RUN3-05-03"
+  geometryVersion: "ATLAS-R3S-2021-03-02-00"
+  simulator: "FullG4MT_QS"
+  physicsList: "FTFP_BERT_ATL"
+
+digitization:
+  asetupRelease: "Athena,24.0.62"
+
+reconstruction:
+  asetupRelease: "Athena,24.0.62"
+
+derivationPHYS:
+  asetupRelease: "Athena,24.0.62"
+
+validation:
+  asetupRelease: "AnalysisBase,24.2.41"
+
+# Directory structure
+paths:
+  generation_dir: "Generation"
+  derivation_dir: "Derivation"
+  simulation_dir: "Simulation"
+  digitization_dir: "Digitization"
+  reconstruction_dir: "Reconstruction"
+  jobconfig_subdir: "100000"
+  validation_dir: "MCValidation"
+  # Optional prefix for the bulky ROOT outputs (Generation/, Derivation/, ...),
+  # e.g. "/eos/user/d/dallen/toppol" on lxplus. Empty = inside the repo.
+  # Job options (Generation/mc.*.py) and MCValidation always stay in the repo.
+  storage_base: ""
+
+# How payloads get the ATLAS environment:
+#   el9  -> setupATLAS -c el9 (apptainer; needed on non-EL9 hosts)
+#   none -> native setupATLAS (fine on EL9 hosts such as lxplus9 batch nodes)
+container: el9
+
+# Per-rule resources. threads also sets the Athena/MadGraph core count.
+# mem_mb and runtime (minutes) are used by the HTCondor profile
+# (profiles/htcondor) and ignored when running locally.
+resources:
+  generateEvgen:    {threads: 16, mem_mb: 16000, runtime: 480}
+  derivation:       {threads: 1,  mem_mb: 4000,  runtime: 60}
+  simulation:       {threads: 8,  mem_mb: 16000, runtime: 1440}
+  digitization:     {threads: 1,  mem_mb: 4000,  runtime: 240}
+  reconstruction:   {threads: 8,  mem_mb: 16000, runtime: 480}
+  derivationPHYS:   {threads: 4,  mem_mb: 8000,  runtime: 240}
+  build_validation: {threads: 4,  mem_mb: 4000,  runtime: 60}
+  validate:         {threads: 1,  mem_mb: 4000,  runtime: 60}

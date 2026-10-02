@@ -1,13 +1,8 @@
-madgraph/pp_tt_semi_full*
 *.root
-*.hepmc
-*.lhe
 .ipynb_checkpoints
-*MG5_aMC_v3*
 *.pkl
 *.png
 *.log
-model/WS*
 *__pycache__
 *.pt
 
@@ -15,3 +10,20 @@ training
 data
 .claude
 envs
+
+# TopCPToolkit framework + the TopPolarimetry analysis package nested inside
+# it (each its own git checkout, plus local build/run artifacts) - set up
+# locally per README.md, not tracked here.
+TopCPToolkit
+
+# Snakemake pipeline's bulky per-job outputs (evgen/HITS/RDO/AOD/DAOD); only
+# *.root is already ignored above, this also covers job-option working dirs.
+Generation/*_ttbar
+Simulation/*_ttbar
+Digitization/*_ttbar
+Reconstruction/*_ttbar
+Derivation/*_ttbar*
+MCValidation/build
+MCValidation/run
+.snakemake
+.asetup.save

@@ -2,12 +2,11 @@
 
 This covers the **reco-level** pipeline: `DataLoader_TopCPToolkit.py` →
 `Combine_DataSets.py` → `New_Training.py` → `New_Eval.py` →
-`Run_Inference.py`. It consumes
-reco ntuples produced by TopCPToolkit/TopPolarimetry (see
-`source/TopPolarimetry/share/configs/mc/reco.yaml`), as opposed to the
-Pythia truth-level pipeline described in the top-level [README.md](../README.md)
-(`DataLoader_Parallel.py`, driven by `run_job.sh`), which is a separate,
-unrelated pipeline not covered here.
+`Run_Inference.py`. It consumes reco ntuples produced by
+TopCPToolkit/TopPolarimetry (see `source/TopPolarimetry/share/configs/mc/reco.yaml`),
+which the top-level [README.md](../README.md) covers how to generate and
+run (the Snakemake simulation workflow, then the TopCPToolkit build/run
+step).
 
 ## Prerequisites
 
@@ -159,8 +158,9 @@ polarimetric angle cosine (`costheta_labels` in the dataset).
 
 ## Known gaps
 
-- The old truth-level pipeline (`DataLoader_Parallel.py`,
-  `run_job.sh`, `New_Eval.py`'s previous 8-label version) is currently
-  unexercised and may not be consistent with the rest of this pipeline.
+- `DataLoader_Parallel.py` is leftover from an old Pythia truth-level
+  pipeline that has since been retired (its generation scripts and
+  `run_job.sh` driver are gone); it's now orphaned and not exercised by
+  anything documented here.
 - Everything above has only been verified on a small (~18-event) test
   file, not a full-scale production sample.
