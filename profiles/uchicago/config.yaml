@@ -1,0 +1,18 @@
+# Snakemake >= 8 profile for HTCondor at the UChicago Analysis Facility.
+# Adapted from profiles/htcondor/ (CERN lxplus) - see README.md for what
+# changed and what's still unverified for this site.
+# Needs: pip install snakemake-executor-plugin-cluster-generic
+# Usage (from the repo root):  snakemake --profile profiles/uchicago [target]
+executor: cluster-generic
+cluster-generic-submit-cmd: "condor_submit.py"
+cluster-generic-status-cmd: "condor_status.py"
+cluster-generic-cancel-cmd: "condor_rm"
+# Start conservative and raise once you know your actual slot allocation -
+# the lxplus profile's 200 was tuned for CERN's shared pool, not this site's.
+jobs: 50
+latency-wait: 60
+max-status-checks-per-second: 1
+retries: 1
+rerun-incomplete: true
+keep-going: true
+printshellcmds: true
