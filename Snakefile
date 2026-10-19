@@ -60,10 +60,9 @@ rule all:
         expand(
             [
                 f"{VAL_DIR}/run/{{p}}_ttbar/hist-{{p}}_ttbar.root",
-                f"{DER_DIR}/{{p}}_ttbar_PHYS/DAOD_PHYS.mcval.pool.root",
             ],
             p=P
-        )
+        ) + expand(f"{DER_DIR}/{{p}}_ttbar_PHYS/job{{j}}/DAOD_PHYS.mcval.pool.root", p=P, j=JOBS)
 
 # Wildcard-free targets so DAOD production can be requested directly,
 # e.g. `snakemake --cores 16 daod_files` (TRUTH3 from EVNT, fast) or
@@ -74,7 +73,7 @@ rule daod_files:
 
 rule daod_phys:
     input:
-        expand(f"{DER_DIR}/{{p}}_ttbar_PHYS/DAOD_PHYS.mcval.pool.root", p=P)
+        expand(f"{DER_DIR}/{{p}}_ttbar_PHYS/job{{j}}/DAOD_PHYS.mcval.pool.root", p=P, j=JOBS)
 
 rule generateEvgen:
     input:
@@ -210,15 +209,17 @@ EOF
         {alrb_container_run("{params.dir}/.alrb_payload.sh")}
         """
 
-# Fan-in: one DAOD_PHYS per polarization from the AODs of all split jobs.
+# One DAOD_PHYS per split job (run in parallel). Deliberately not merged into
+# one file: a single serial derivation over all AODs ran ~65 events/min, i.e.
+# ~6 h for 25k events. TopCPToolkit takes the per-job files as a list.
 rule derivationPHYS:
     input:
-        lambda w: expand(f"{RECO_DIR}/{w.p}_ttbar/job{{j}}/AOD.pool.root", j=JOBS)
+        f"{RECO_DIR}/{{p}}_ttbar/job{{j}}/AOD.pool.root"
     output:
-        f"{DER_DIR}/{{p}}_ttbar_PHYS/DAOD_PHYS.mcval.pool.root"
+        f"{DER_DIR}/{{p}}_ttbar_PHYS/job{{j}}/DAOD_PHYS.mcval.pool.root"
     params:
-        dir=lambda w: f"{DER_DIR}/{w.p}_ttbar_PHYS",
-        inp=lambda w, input: rel_to(input, f"{DER_DIR}/{w.p}_ttbar_PHYS"),
+        dir=lambda w: f"{DER_DIR}/{w.p}_ttbar_PHYS/job{w.j}",
+        inp=lambda w, input: rel_to(input, f"{DER_DIR}/{w.p}_ttbar_PHYS/job{w.j}"),
         mt=lambda w, threads: mt_flags(threads)
     threads: res("derivationPHYS")["threads"]
     resources:
@@ -237,6 +238,70 @@ rule derivationPHYS:
 EOF
         {alrb_container_run("{params.dir}/.alrb_payload.sh")}
         """
+
+# TopCPToolkit reco-level ntuple, one condor job per split job. Needs the
+# pre-built TopCPToolkit/ working area (see README); each job gets its own
+# run directory since the toolkit writes configuration_*.json into the cwd.
+TCP_BUILD = os.path.abspath("TopCPToolkit/build")
+TCP_DIR = "TopCPToolkit/run"
+
+rule topcptoolkit:
+    input:
+        f"{DER_DIR}/{{p}}_ttbar_PHYS/job{{j}}/DAOD_PHYS.mcval.pool.root"
+    output:
+        f"{TCP_DIR}/{{p}}_ttbar/job{{j}}/output.root"
+    params:
+        dir=lambda w: os.path.abspath(f"{TCP_DIR}/{w.p}_ttbar/job{w.j}"),
+        inp=lambda w, input: os.path.abspath(input[0])
+    threads: res("topcptoolkit")["threads"]
+    resources:
+        mem_mb=res("topcptoolkit")["mem_mb"],
+        runtime=res("topcptoolkit")["runtime"]
+    shell:
+        f"""
+        set +eu
+        rm -rf {{params.dir}}
+        mkdir -p {{params.dir}}
+        printf '%s' {{params.inp}} > {{params.dir}}/input.txt
+        cat > {{params.dir}}/.alrb_payload.sh << 'EOF'
+        cd {TCP_BUILD}
+        asetup --restore
+        source x86_64-*/setup.sh
+        cd {{params.dir}}
+        runTop_el.py -i input.txt -o output --no-systematics --particle -p TopPolarimetry/ -t mc
+EOF
+        {alrb_container_run("{params.dir}/.alrb_payload.sh")}
+        """
+
+# hadd the per-job ntuples (plain ROOT trees, unlike the POOL DAODs).
+rule ntuple_merge:
+    input:
+        lambda w: expand(f"{TCP_DIR}/{w.p}_ttbar/job{{j}}/output.root", j=JOBS)
+    output:
+        f"{TCP_DIR}/{{p}}_ttbar/ntuple_{{p}}_ttbar.root"
+    params:
+        dir=lambda w: os.path.abspath(f"{TCP_DIR}/{w.p}_ttbar"),
+        inp=lambda w, input: " ".join(os.path.abspath(i) for i in input)
+    threads: res("ntuple_merge")["threads"]
+    resources:
+        mem_mb=res("ntuple_merge")["mem_mb"],
+        runtime=res("ntuple_merge")["runtime"]
+    shell:
+        f"""
+        set +eu
+        cat > {{params.dir}}/.alrb_merge_payload.sh << 'EOF'
+        cd {TCP_BUILD}
+        asetup --restore
+        source x86_64-*/setup.sh
+        cd {{params.dir}}
+        hadd -f ntuple_{{wildcards.p}}_ttbar.root {{params.inp}}
+EOF
+        {alrb_container_run("{params.dir}/.alrb_merge_payload.sh")}
+        """
+
+rule ntuples:
+    input:
+        expand(f"{TCP_DIR}/{{p}}_ttbar/ntuple_{{p}}_ttbar.root", p=P)
 
 # Built once and shared by every validate job (rebuilt when sources change).
 rule build_validation:
@@ -285,6 +350,7 @@ rule validate:
         source x86_64-*/setup.sh
         cd ../run
         MCVal_eljob.py --input-file {{params.inp}}/ --submission-dir {{wildcards.p}}_ttbar
+        hadd -f {{wildcards.p}}_ttbar/hist-{{wildcards.p}}_ttbar.root {{wildcards.p}}_ttbar/hist-job*.root
 EOF
         {alrb_container_run(f"{VAL_DIR}/run/.alrb_payload_{{wildcards.p}}.sh")}
         """

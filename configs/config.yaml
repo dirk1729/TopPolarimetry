@@ -68,11 +68,18 @@ container: el9
 # mem_mb and runtime (minutes) are used by the HTCondor profile
 # (profiles/htcondor) and ignored when running locally.
 resources:
-  generateEvgen:    {threads: 16, mem_mb: 16000, runtime: 480}
+  # Sized from a 5 job x 100 event run on UChicago (peak RSS: gen 2.0 GB,
+  # sim 3.4, digi 3.4, reco 4.5; gen is ~single-core). Re-check for larger
+  # eventsPerJob, where runtime and memory grow.
+  generateEvgen:    {threads: 2,  mem_mb: 4000,  runtime: 480}
   derivation:       {threads: 1,  mem_mb: 4000,  runtime: 60}
-  simulation:       {threads: 8,  mem_mb: 16000, runtime: 1440}
-  digitization:     {threads: 1,  mem_mb: 4000,  runtime: 240}
-  reconstruction:   {threads: 8,  mem_mb: 16000, runtime: 480}
-  derivationPHYS:   {threads: 4,  mem_mb: 8000,  runtime: 240}
+  simulation:       {threads: 8,  mem_mb: 8000,  runtime: 1440}
+  digitization:     {threads: 1,  mem_mb: 6000,  runtime: 240}
+  reconstruction:   {threads: 4,  mem_mb: 8000,  runtime: 480}
+  # threads: 1 on purpose - the 4-thread (AthenaMT) PHYS derivation segfaults in
+  # EGammaClusterCoreCellRecovery::findMaxECell on Athena 24.0.62
+  derivationPHYS:   {threads: 1,  mem_mb: 8000,  runtime: 240}
+  topcptoolkit:     {threads: 1,  mem_mb: 4000,  runtime: 120}
+  ntuple_merge:     {threads: 1,  mem_mb: 4000,  runtime: 60}
   build_validation: {threads: 4,  mem_mb: 4000,  runtime: 60}
   validate:         {threads: 1,  mem_mb: 4000,  runtime: 60}

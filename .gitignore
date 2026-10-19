@@ -27,3 +27,4 @@ MCValidation/build
 MCValidation/run
 .snakemake
 .asetup.save
+logs/

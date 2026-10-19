@@ -33,8 +33,9 @@ Edit `configs/config.yaml`:
 ```
 snakemake --cores <N> daod_phys
 ```
-produces `Derivation/<pol>_ttbar_PHYS/DAOD_PHYS.mcval.pool.root` for each
-configured polarization — the file the TopCPToolkit step below consumes.
+produces one `Derivation/<pol>_ttbar_PHYS/job<NNNN>/DAOD_PHYS.mcval.pool.root`
+per split job and polarization (not merged — pass them all to the TopCPToolkit
+step below, e.g. `--inputFiles` with a comma-separated list or a glob).
 
 Other useful targets:
 - `snakemake --cores <N> daod_files` — just TRUTH1/TRUTH3 from EVNT

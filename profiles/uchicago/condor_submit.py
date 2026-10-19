@@ -76,8 +76,10 @@ def main():
         f"error          = {log}.err",
         f"log            = {log}.log",
     ]
+    # Opt-in: the simulation chain needs no grid data access, and condor_submit
+    # refuses to submit at all when the proxy in the env has expired.
     proxy = os.environ.get("X509_USER_PROXY")
-    if proxy:
+    if proxy and os.environ.get("CONDOR_FORWARD_PROXY") == "1":
         lines.append(f"x509userproxy  = {proxy}")
     lines.append("queue 1")
 
